@@ -1,0 +1,30 @@
+create database staff
+
+create table baseinfo (cardID char(20) not null,staff_name char(10) not null,staff_sex char(2) not null,staff_photo char(20) not null,staff_ID char(20)not null,staff_birth char(10) not null,staff_phone char(15) not null,staff_address char(20),staff_department char(10) not null,staff_position char(10) not null,staff_startwork_time char(10) not null,staff_base_pay int not null,staff_login_pass char(20) default '123456',primary key(cardID));
+
+create table baseinfo (cardID char(12) not null,staff_name char(10)  not null,staff_sex char(3) not null,staff_photo char(100) not null,staff_ID char(20)not null,staff_birth char(10) not null,staff_phone char(15) not null,staff_address char(40),staff_department char(10) not null,staff_position char(10) not null,staff_login_pass char(20) default '123456',primary key(cardID));
+
+create table workinfo (cardID char(20) not null,brush_card_date char(15) not null,brush_card_time char(10) not null,staff_photos char(100) not null);
+
+insert into baseinfo values('123456789','aaa','男','a.tex','130535199003072411','199003','15369609533','河北省临西县','销售部','员工','20131101',4000,'123456');
+
+insert into baseinfo values('123456789','111','男','a.txt','130535199003072411','199003','15369609533','河北省临西县','销售部','员工','111');
+
+insert into workinfo values('111','20131003','0730','/root/QT/work1/images/1.PNG');
+
+select t1.cardID,t2.staff_name,t1.brush_card_time,t1.staff_photos from workinfo t1,baseinfo t2 where t1.cardID=(select cardID from baseinfo where cardID='111') and t1.cardID=t2.cardID;//按卡号查询
+
+select t1.cardID,t2.staff_name,t1.brush_card_time,t1.staff_photos from workinfo t1,baseinfo t2 where t1.cardID=t2.cardID;
+
+"select t1.cardID,t2.staff_name,t1.brush_card_time,t1.staff_photos from workinfo t1,baseinfo t2 where t1.cardID in (select cardID from baseinfo where cardID like '"+staff.card_ID+"' and staff_name like '"+staff.staff_name+"' and staff_sex like '"+staff.staff_sex+"' and staff_ID like '"+staff.staff_ID+"' and staff_phone like '"+staff.staff_phone+"' staff_department like '"+staff.staff_department+"' and staff_position like '"+staff.staff_position+"') and brush_card_time between '"+startTime+"' and '"+endTime+"' and t1.cardId=t2.cardID";
+
+select t1.cardID,t2.staff_name,t1.brush_card_time,t1.staff_photos from workinfo t1,baseinfo t2 where t2.cardID in (select cardID from workinfo where brush_card_time between '200012010000' and '200012040000') and t1.cardID='111' and t1.cardID=t2.cardID;
+
+刷卡次数
+select count(brush_card_date) from workinfo where brush_card_date between '20131010' and '20131111' and cardID=111; 
+
+迟到次数
+select count(brush_card_time) from workinfo where brush_card_date between '20131010' and '20131111' and brush_card_time > '0800' and cardID=111; 
+
+
+
