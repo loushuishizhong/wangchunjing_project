@@ -1,0 +1,1384 @@
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE CANLANDER
+OBJECT MODULE PLACED IN canlander.OBJ
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE canlander.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include<reg52.h>
+   2          #include<intrins.h>
+   3          unsigned char code  displaywelcome[]={" Welcome To My Lcd Timer"};//欢迎界面
+   4          unsigned char code  displaywish[]={" Happy Every Day ^_^"};        //欢迎界面
+   5          unsigned char code  overtemperature[]={"OVERTEMPERATURE!"};
+   6          unsigned char code  digit[]={"0123456789"};                //数字代码
+   7          unsigned char mode,TH,TL,TN,TD,length,tempswitch,Maxtemp=40,amode,alarmmode,minutes,hours,minutea,seconds,
+             -houra=12;
+   8          
+   9          
+  10          sbit SCLK=P1^6; //PCF8563时钟输入
+  11          sbit DATE=P1^7; //PCF8563数据输入                                                               
+  12          //sbit REST=P1^2;       //DS1302复位端口
+  13          sbit SET=P3^0;  //PCF8563设置模式选择位
+  14          sbit ADD=P3^1;  //增加
+  15          sbit RED=P3^2;  //减小
+  16          sbit CANL=P3^3; //取消
+  17          
+  18          void delay1ms(int i)//1毫秒延时
+  19          {
+  20   1         int j,k;
+  21   1         while(i--)
+  22   1         for(j=76;j>1;j--);
+  23   1         for(k=29;k>1;k--);                                   
+  24   1       }
+  25          void delaynus(unsigned char n) //延时若干微秒
+  26          {
+  27   1         unsigned char i;
+  28   1         for(i=0;i<n;i++);    
+  29   1      }
+  30          /***********蜂鸣器模块************/
+  31           sbit beep=P3^7;        //位定义，定义P.7位fmp
+  32           void dely500(void)
+  33          {
+  34   1        unsigned char i;
+  35   1        for(i=250;i>0;i--)
+  36   1          {
+  37   2            _nop_();
+  38   2          }
+  39   1      }
+  40          void baojing(unsigned char n)
+  41          {
+  42   1         unsigned char x,i;
+  43   1         while(n--)
+  44   1        {
+  45   2           for(i=0;i<5;i++)
+  46   2           {
+  47   3              for(x=0;x<200;x++)
+  48   3                      {
+  49   4                              beep=~beep;
+  50   4                              dely500();
+  51   4                      }
+  52   3           }
+  53   2           for(i=0;i<3;i++)
+  54   2          {
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 2   
+
+  55   3                      for(x=0;x<200;x++)
+  56   3                      {
+  57   4                              beep=~beep;
+  58   4                              dely500();
+  59   4                              dely500();
+  60   4                      }
+  61   3              }
+  62   2        }
+  63   1      }
+  64          
+  65          /************PCF8563模块**********/
+  66          void start_pcf8563() //开启PCF8563IIC 
+  67          { 
+  68   1              DATE=1; 
+  69   1              SCLK=1; 
+  70   1              DATE=0;//SCL为低，DATA执行一个上跳
+  71   1              SCLK=0;//SCL为低，嵌住数据线
+  72   1      } 
+  73          
+  74          void stop_pcf8563() //关闭PCF8563IIC 
+  75          { 
+  76   1              DATE=0; 
+  77   1              SCLK=1; 
+  78   1              DATE=1;//SCL为高，DATA执行一个上跳
+  79   1              SCLK=0;//SCL为低，嵌住数据线
+  80   1      } 
+  81          
+  82          
+  83          
+  84          
+  85          void Write8563(unsigned char dat)//向8563写数据
+  86           {
+  87   1              unsigned char i;
+  88   1              SCLK=0;
+  89   1              delaynus(2);
+  90   1              for(i=0;i<8;i++)
+  91   1              {
+  92   2                      DATE=dat&0x01;
+  93   2                      SCLK=1;
+  94   2                      delaynus(2);
+  95   2                      SCLK=0;
+  96   2                      delaynus(2);
+  97   2                      dat>>=1;
+  98   2      
+  99   2              }
+ 100   1      }
+ 101          void WriteSet8563(unsigned char cmd,unsigned char date) //根据相应的命令输入相应的数据
+ 102          { 
+ 103   1              start_pcf8563(); 
+ 104   1              Write8563(cmd);
+ 105   1              delaynus(5);
+ 106   1              Write8563(date); 
+ 107   1              stop_pcf8563(); 
+ 108   1      } 
+ 109          
+ 110          
+ 111          unsigned char Read8563() //读取8563数据
+ 112          {  
+ 113   1              unsigned char i,date;
+ 114   1              delaynus(2);
+ 115   1              for(i=0;i<8;i++)
+ 116   1              {
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 3   
+
+ 117   2                      date>>=1;
+ 118   2                      if(DATE==1)
+ 119   2                      date|=0x80;
+ 120   2                      SCLK=1;
+ 121   2                      delaynus(2);
+ 122   2                      SCLK=0;
+ 123   2                      delaynus(2);
+ 124   2              }
+ 125   1              return date;
+ 126   1      } 
+ 127          unsigned char  ReadSet8563(unsigned char cmd)   //根据命令读取8563相应的值
+ 128          { 
+ 129   1              unsigned char date;
+ 130   1              start_pcf8563(); 
+ 131   1      
+ 132   1              Write8563(cmd);
+ 133   1              delaynus(2);
+ 134   1              date=Read8563();
+ 135   1      
+ 136   1              stop_pcf8563(); 
+ 137   1              return date;
+ 138   1      } 
+ 139          
+ 140          void IntPCF8563(void) //PCF8563初始化
+ 141          {       
+ 142   1        unsigned char flag;
+ 143   1         
+ 144   1          flag= ReadSet8563(0x81);
+ 145   1              if(flag&0x80)   
+ 146   1              {      //判断时钟芯片是否关闭
+ 147   2                      WriteSet8563(0x8E,0x00);                 //根据写状态寄存器命令字，写入不保护指令 
+ 148   2                      WriteSet8563(0x80,((0/10)<<4|(0%10)));   //根据写秒寄存器命令字，写入秒的初始值
+ 149   2                      WriteSet8563(0x82,((0/10)<<4|(0%10)));   //根据写分寄存器命令字，写入分的初始值
+ 150   2                      WriteSet8563(0x84,((0/10)<<4|(0%10))); //根据写小时寄存器命令字，写入小时的初始值
+ 151   2                      WriteSet8563(0x86,((0/10)<<4|(0%10))); //根据写日寄存器命令字，写入日的初始值
+ 152   2                      WriteSet8563(0x88,((0/10)<<4|(0%10))); //根据写月寄存器命令字，写入月的初始值
+ 153   2                      WriteSet8563(0x8c,((10/10)<<4|(10%10)));  //根据写年寄存器命令字，写入年的初始值
+ 154   2                      WriteSet8563(0x90,0xa5);                //打开充电功能 选择2K电阻充电方式
+ 155   2                      WriteSet8563(0x8E,0x80);                           //根据写状态寄存器命令字，写入保护指令
+ 156   2        }
+ 157   1       }
+ 158          
+ 159          
+ 160          
+ 161          /***************液晶显示模块*****************/
+ 162          sbit RS=P2^7;
+ 163          sbit RW=P2^6;
+ 164          sbit E=P2^5;
+ 165          sbit BF=P0^7;
+ 166            /*液晶忙检测*/
+ 167          bit BusyTest(void)
+ 168          {
+ 169   1              bit result;
+ 170   1              RS=0;
+ 171   1              RW=1;
+ 172   1              E=1;
+ 173   1              _nop_();
+ 174   1              _nop_();
+ 175   1              _nop_();
+ 176   1              result=BF;
+ 177   1              _nop_();
+ 178   1              _nop_();
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 4   
+
+ 179   1              _nop_();
+ 180   1              E=0;
+ 181   1              return result;
+ 182   1      }
+ 183          /*写指令*/
+ 184          void Write_com(unsigned char command)
+ 185          {
+ 186   1              while(BusyTest()!=0);
+ 187   1              RS=0;
+ 188   1              RW=0;
+ 189   1              E=0;
+ 190   1              _nop_();
+ 191   1              _nop_();
+ 192   1              _nop_();
+ 193   1              P0=command;
+ 194   1              _nop_();
+ 195   1              _nop_();
+ 196   1              _nop_();
+ 197   1              E=1;
+ 198   1              _nop_();
+ 199   1              _nop_();
+ 200   1              _nop_();
+ 201   1              E=0;
+ 202   1      }
+ 203          /*写地址*/
+ 204          void Write_Address(unsigned char address)
+ 205          {
+ 206   1              Write_com(address|0x80);
+ 207   1              delay1ms(1);    
+ 208   1      } 
+ 209          /*写数据*/
+ 210          void Write_Date(unsigned char date)
+ 211          {
+ 212   1              RS=1;
+ 213   1              RW=0;
+ 214   1              E=0;
+ 215   1              _nop_();
+ 216   1              _nop_();
+ 217   1              _nop_();
+ 218   1              P0=date;
+ 219   1              _nop_();
+ 220   1              _nop_();
+ 221   1              _nop_();
+ 222   1              E=1;
+ 223   1              _nop_();
+ 224   1              _nop_();
+ 225   1              _nop_();
+ 226   1              E=0;
+ 227   1              delay1ms(1);
+ 228   1      }
+ 229          /*初始化*/
+ 230          void Lcd_Int(void)
+ 231          {
+ 232   1              Write_com(0x30);
+ 233   1              delay1ms(50);
+ 234   1              Write_com(0x01);
+ 235   1              delay1ms(50);
+ 236   1              Write_com(0x06);
+ 237   1              delay1ms(50);
+ 238   1              Write_com(0x0c);
+ 239   1              //delay1ms(1);
+ 240   1              //Write_com(0x01);              
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 5   
+
+ 241   1      }
+ 242          void displaymainpart(void)//显示液晶主要部分（不变化部分）
+ 243          {
+ 244   1              Write_Address(0x01);
+ 245   1              delay1ms(1);
+ 246   1              Write_Date('D');
+ 247   1              Write_Date('A');
+ 248   1              Write_Date('T');
+ 249   1              Write_Date('E');
+ 250   1              Write_Date(':');
+ 251   1              delay1ms(1);
+ 252   1              Write_Address(0x0A);
+ 253   1              delay1ms(1);
+ 254   1              Write_Date('-');
+ 255   1              Write_Address(0x0D);
+ 256   1              Write_Date('-');
+ 257   1              Write_Address(0x42);
+ 258   1              Write_Date('T');
+ 259   1              Write_Date('I');
+ 260   1              Write_Date('M');
+ 261   1              Write_Date('E');
+ 262   1              Write_Date(':');
+ 263   1              Write_Address(0x4A);
+ 264   1              Write_Date('-');
+ 265   1              Write_Address(0x4D);
+ 266   1              Write_Date('-');
+ 267   1              Write_Address(0x06);
+ 268   1              Write_Date('2');
+ 269   1              Write_Date('0');
+ 270   1      }
+ 271          void display_Second(unsigned char second) //在液晶上显示秒
+ 272          {       
+ 273   1              unsigned char i,j;
+ 274   1              i=second/10;
+ 275   1              j=second%10;
+ 276   1              Write_Address(0x4E);
+ 277   1              Write_Date(digit[i]);
+ 278   1              Write_Date(digit[j]);
+ 279   1              delay1ms(1);
+ 280   1      }
+ 281          void display_Minute(unsigned char minute) //在液晶上显示分
+ 282          {
+ 283   1              unsigned char i,j;
+ 284   1              i=minute/10;
+ 285   1              j=minute%10;
+ 286   1              Write_Address(0x4B);
+ 287   1              Write_Date(digit[i]);
+ 288   1              Write_Date(digit[j]);
+ 289   1              delay1ms(1);
+ 290   1      }
+ 291          void display_Hour(unsigned char hour)  //在液晶上显示时
+ 292          {
+ 293   1              unsigned char i,j;
+ 294   1              i=hour/10;
+ 295   1              j=hour%10;
+ 296   1              Write_Address(0x48);
+ 297   1              Write_Date(digit[i]);
+ 298   1              Write_Date(digit[j]);
+ 299   1              delay1ms(1);
+ 300   1      }
+ 301          void display_Day(unsigned char day)     //在液晶上显示日
+ 302          {
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 6   
+
+ 303   1              unsigned char i,j;
+ 304   1              i=day/10;
+ 305   1              j=day%10;
+ 306   1              Write_Address(0x0E);
+ 307   1              Write_Date(digit[i]);
+ 308   1              Write_Date(digit[j]);
+ 309   1              delay1ms(1);
+ 310   1      }
+ 311          void display_Month(unsigned char month) //在液晶上显示月
+ 312          {
+ 313   1              unsigned char i,j;
+ 314   1              i=month/10;
+ 315   1              j=month%10;
+ 316   1              Write_Address(0x0B);
+ 317   1              Write_Date(digit[i]);
+ 318   1              Write_Date(digit[j]);
+ 319   1              delay1ms(1);
+ 320   1      }
+ 321          void display_Year(unsigned char  year) //在液晶上显示年
+ 322          {
+ 323   1              unsigned char i,j;
+ 324   1              i=year/10;
+ 325   1              j=year%10;
+ 326   1              Write_Address(0x08);
+ 327   1              Write_Date(digit[i]);
+ 328   1              Write_Date(digit[j]);
+ 329   1              delay1ms(1);
+ 330   1      }
+ 331          void display_houra(unsigned char x)     //闹钟小时部分显示
+ 332          {
+ 333   1              unsigned char i,j;
+ 334   1              i=x/10;
+ 335   1              j=x%10;
+ 336   1              Write_Address(0x44);
+ 337   1              Write_Date(digit[i]);
+ 338   1              Write_Date(digit[j]);   
+ 339   1      }
+ 340          void display_minutea(unsigned char x)//闹钟分钟部分显示
+ 341          {
+ 342   1              unsigned char i,j;
+ 343   1              i=x/10;
+ 344   1              j=x%10;
+ 345   1              Write_Address(0x47);
+ 346   1              Write_Date(digit[i]);
+ 347   1              Write_Date(digit[j]);
+ 348   1      }
+ 349          void display_Time(void)  //显示实时时间
+ 350          {
+ 351   1              unsigned char value,day,month,year;
+ 352   1              Write_com(0x0c);
+ 353   1              value=ReadSet8563(0x81);
+ 354   1              seconds=(((value&0x70)>>4)*10+(value&0x0f));
+ 355   1              display_Second(seconds);
+ 356   1              value=ReadSet8563(0x83);
+ 357   1              minutes=(((value&0x70)>>4)*10+(value&0x0f));
+ 358   1              display_Minute(minutes);
+ 359   1              value=ReadSet8563(0x85);
+ 360   1              hours=(((value&0x70)>>4)*10+(value&0x0f));
+ 361   1              display_Hour(hours);
+ 362   1              value=ReadSet8563(0x87);
+ 363   1              day=(((value&0x70)>>4)*10+(value&0x0f));
+ 364   1              display_Day(day);
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 7   
+
+ 365   1              value=ReadSet8563(0x89);
+ 366   1              month=(((value&0x70)>>4)*10+(value&0x0f));
+ 367   1              display_Month(month);
+ 368   1              value=ReadSet8563(0x8D);
+ 369   1              year=(((value&0xf0)>>4)*10+(value&0x0f));
+ 370   1              display_Year(year);
+ 371   1      }
+ 372          void displaystar(void) //显示欢迎界面
+ 373          {
+ 374   1              unsigned char i,j;
+ 375   1              Write_Address(0x0f);
+ 376   1              while(displaywelcome[i]!='\0')
+ 377   1              {
+ 378   2                      Write_Date(displaywelcome[i]);
+ 379   2                      i++;
+ 380   2                      delay1ms(1);
+ 381   2              }
+ 382   1              i=0;
+ 383   1              Write_Address(0x4f);
+ 384   1              while(displaywish[i]!='\0')
+ 385   1              {
+ 386   2                      Write_Date(displaywish[i]);
+ 387   2                      i++;
+ 388   2                      delay1ms(1);
+ 389   2              }
+ 390   1              j=40;
+ 391   1              while(j--)
+ 392   1              {
+ 393   2                      Write_com(0x18);//循环左移
+ 394   2                      delay1ms(700);
+ 395   2              } 
+ 396   1              Write_com(0x01);
+ 397   1              delay1ms(10);
+ 398   1      }
+ 399          void gbdisplay(unsigned char address) //时间调整时光标闪烁
+ 400          {
+ 401   1              Write_Address(address);
+ 402   1              delay1ms(5);
+ 403   1              Write_com(0x0f);
+ 404   1              delay1ms(5);     
+ 405   1      }
+ 406          void displaymaxt(unsigned char x) //显示最大温度
+ 407          {
+ 408   1              unsigned char i,j,k;
+ 409   1              Write_com(0x0c);
+ 410   1              delay1ms(2);
+ 411   1              Write_Address(0x44);
+ 412   1              i=x/100;
+ 413   1              j=x/10;
+ 414   1              k=x%10;
+ 415   1              Write_Date(digit[i]);
+ 416   1              Write_Date(digit[j]);
+ 417   1              Write_Date(digit[k]);   
+ 418   1      }
+ 419          /*****************时间调整部分*********************/
+ 420          void hourset(void)              //调时
+ 421          {
+ 422   1              unsigned char timevalue,hour;
+ 423   1              delay1ms(500);  //防止多次触发
+ 424   1              WriteSet8563(0x8e,0x00);//将写保护去掉，确保能正常将调整后的数值写入DS1302
+ 425   1              timevalue=ReadSet8563(0x85); //读取此时的数值
+ 426   1              hour=(((timevalue&0x70)>>4)*10+(timevalue&0x0f));
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 8   
+
+ 427   1              while(1)
+ 428   1              {
+ 429   2                      
+ 430   2                      if(ADD==0)
+ 431   2                      {
+ 432   3                              delay1ms(50);
+ 433   3                              if(ADD==0)
+ 434   3                              {
+ 435   4                                      hour++;
+ 436   4                                      delay1ms(300);
+ 437   4                                      while(ADD==0);
+ 438   4                              }
+ 439   3                      }
+ 440   2                      if(RED==0)
+ 441   2                      {
+ 442   3                              delay1ms(50);
+ 443   3                              if(RED==0)
+ 444   3                              {
+ 445   4                                      hour--;
+ 446   4                                      delay1ms(300);
+ 447   4                                      if(hour==0) hour=23;
+ 448   4                                      while(RED==0);
+ 449   4                              }
+ 450   3                      }
+ 451   2                      timevalue=(((hour)/10)<<4|(hour%10));
+ 452   2                      WriteSet8563(0x84,timevalue);
+ 453   2                      delay1ms(1);
+ 454   2                      display_Hour(hour);
+ 455   2                      Write_Address(0x49);
+ 456   2                      delay1ms(5);
+ 457   2                      if(hour>=24) hour=0;
+ 458   2                      delay1ms(5);
+ 459   2                      if(CANL==0) 
+ 460   2                      {
+ 461   3                              mode=0;
+ 462   3                              Write_com(0x0c);
+ 463   3                              break;
+ 464   3                      }
+ 465   2                      if(SET==0) break;
+ 466   2              }
+ 467   1              WriteSet8563(0x8e,0x80);
+ 468   1      }
+ 469          void minuteset(void)                     //调分
+ 470          {
+ 471   1              unsigned char timevalue,minute;
+ 472   1              delay1ms(500);
+ 473   1              WriteSet8563(0x8e,0x00);
+ 474   1              timevalue=ReadSet8563(0x83);
+ 475   1              minute=(((timevalue&0x70)>>4)*10+(timevalue&0x0f));
+ 476   1              while(1)
+ 477   1              {
+ 478   2                      if(ADD==0)
+ 479   2                      {
+ 480   3                              delay1ms(10);
+ 481   3                              if(ADD==0)
+ 482   3                              {
+ 483   4                                      minute++;
+ 484   4                                      if(minute>=60) timevalue=0;
+ 485   4                                      while(ADD==0);
+ 486   4                              }
+ 487   3                      }
+ 488   2                      if(RED==0)
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 9   
+
+ 489   2                      {
+ 490   3                              delay1ms(10);
+ 491   3                              if(RED==0)
+ 492   3                              {
+ 493   4                                      minute--;
+ 494   4                                      delay1ms(300);
+ 495   4                                      if(minute==0) minute=59;
+ 496   4                                      while(RED==0);
+ 497   4                              }
+ 498   3                      }
+ 499   2                      timevalue=((minute/10)<<4|(minute%10));
+ 500   2                      WriteSet8563(0x82,timevalue);
+ 501   2                      delay1ms(1);
+ 502   2                      display_Minute(minute);
+ 503   2                      Write_Address(0x4c);
+ 504   2                      delay1ms(5);
+ 505   2                      if(minute>=60) minute=0;
+ 506   2                      delay1ms(5);
+ 507   2                      if(CANL==0) 
+ 508   2                      {
+ 509   3                              mode=0;
+ 510   3                              Write_com(0x0c);
+ 511   3                              break;
+ 512   3                      }
+ 513   2                      if(SET==0) break;
+ 514   2              }
+ 515   1              WriteSet8563(0x8e,0x80);
+ 516   1      }
+ 517          void secondset(void)                       //秒归零
+ 518          {
+ 519   1              unsigned char second;
+ 520   1              delay1ms(500);
+ 521   1              WriteSet8563(0x8e,0x00);
+ 522   1              while(1)
+ 523   1              {
+ 524   2                      if(ADD==0)
+ 525   2                      {
+ 526   3                              delay1ms(10);
+ 527   3                              if(ADD==0)
+ 528   3                              {
+ 529   4                                      second=0;
+ 530   4                                      WriteSet8563(0x80,0x00);
+ 531   4                                      while(ADD==0);
+ 532   4                              }
+ 533   3                      }
+ 534   2                      delay1ms(1);
+ 535   2                      display_Second(second);
+ 536   2                      Write_Address(0x4f);
+ 537   2                      delay1ms(5);
+ 538   2                      if(CANL==0) 
+ 539   2                      {
+ 540   3                              mode=0;
+ 541   3                              Write_com(0x0c);
+ 542   3                              break;
+ 543   3                      }
+ 544   2                      if(SET==0) break;
+ 545   2              }
+ 546   1              WriteSet8563(0x8e,0x80);
+ 547   1      }       
+ 548          void yearset(void)                                      //调年
+ 549          {
+ 550   1              unsigned char datevalue,year;
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 10  
+
+ 551   1              delay1ms(500);
+ 552   1              WriteSet8563(0x8e,0x00);
+ 553   1              datevalue=ReadSet8563(0x8d);
+ 554   1              year=(((datevalue&0x70)>>4)*10+(datevalue&0x0f));
+ 555   1              while(1)
+ 556   1              {
+ 557   2                      if(ADD==0)
+ 558   2                      {
+ 559   3                              delay1ms(10);
+ 560   3                              if(ADD==0)
+ 561   3                              {
+ 562   4                                      year++;
+ 563   4                                      while(ADD==0);
+ 564   4                              }
+ 565   3                      }
+ 566   2                      if(RED==0)
+ 567   2                      {
+ 568   3                              delay1ms(10);
+ 569   3                              if(RED==0)
+ 570   3                              {
+ 571   4                                      year--;
+ 572   4                                      delay1ms(300);
+ 573   4                                      while(RED==0);
+ 574   4                              }
+ 575   3                      }
+ 576   2                      datevalue=((year/10)<<4|(year%10));
+ 577   2                      WriteSet8563(0x8c,datevalue);
+ 578   2                      delay1ms(5);    
+ 579   2                      display_Year(year);
+ 580   2                      delay1ms(5);
+ 581   2                      Write_Address(0x09);
+ 582   2                      delay1ms(5);
+ 583   2                      if(CANL==0) 
+ 584   2                      {
+ 585   3                              mode=0;
+ 586   3                              Write_com(0x0c);
+ 587   3                              break;
+ 588   3                      }
+ 589   2                      if(SET==0) break;
+ 590   2              }
+ 591   1              WriteSet8563(0x8e,0x80);
+ 592   1      }
+ 593          void monthset(void)                                             //调月
+ 594          {
+ 595   1              unsigned char datevalue,month;
+ 596   1              delay1ms(500);
+ 597   1              WriteSet8563(0x8e,0x00);
+ 598   1              datevalue=ReadSet8563(0x89);
+ 599   1              month=(((datevalue&0x70)>>4)*10+(datevalue&0x0f));
+ 600   1              while(1)
+ 601   1              {
+ 602   2                      if(ADD==0)
+ 603   2                      {
+ 604   3                              delay1ms(10);
+ 605   3                              if(ADD==0)
+ 606   3                              {
+ 607   4                                      month++;
+ 608   4                                      if(month>12) month=1;
+ 609   4                                      while(ADD==0);
+ 610   4                              }
+ 611   3                      }
+ 612   2                      if(RED==0)
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 11  
+
+ 613   2                      {
+ 614   3                              delay1ms(10);
+ 615   3                              if(RED==0)
+ 616   3                              {
+ 617   4                                      month--;
+ 618   4                                      delay1ms(300);
+ 619   4                                      if(month==0) month=12;
+ 620   4                                      while(RED==0);
+ 621   4                              }
+ 622   3                      }
+ 623   2                      datevalue=((month/10)<<4|(month%10));
+ 624   2                      WriteSet8563(0x88,datevalue);
+ 625   2                      delay1ms(1);            
+ 626   2                      display_Month(month);
+ 627   2                      Write_Address(0x0c);
+ 628   2                      delay1ms(5);
+ 629   2                      if(CANL==0) 
+ 630   2                      {
+ 631   3                              mode=0;
+ 632   3                              Write_com(0x0c);
+ 633   3                              break;
+ 634   3                      }
+ 635   2                      if(SET==0) break;
+ 636   2              }
+ 637   1              WriteSet8563(0x8e,0x80);
+ 638   1      }
+ 639          void dayset(void)                                 //调日
+ 640          {
+ 641   1              unsigned char datevalue,day;
+ 642   1              delay1ms(500);
+ 643   1              WriteSet8563(0x8e,0x00);
+ 644   1              datevalue=ReadSet8563(0x87);
+ 645   1              day=(((datevalue&0x70)>>4)*10+(datevalue&0x0f));
+ 646   1              while(1)
+ 647   1              {
+ 648   2                      if(ADD==0)
+ 649   2                      {
+ 650   3                              delay1ms(10);
+ 651   3                              if(ADD==0)
+ 652   3                              {
+ 653   4                                      day++;
+ 654   4                                      if(day>31) day=1;
+ 655   4                                      while(ADD==0);
+ 656   4                              }
+ 657   3                      }
+ 658   2                      if(RED==0)
+ 659   2                      {
+ 660   3                              delay1ms(10);
+ 661   3                              if(RED==0)
+ 662   3                              {
+ 663   4                                      day--;
+ 664   4                                      delay1ms(300);
+ 665   4                                      if(day==0) day=31;
+ 666   4                                      while(RED==0);
+ 667   4                              }
+ 668   3                      }
+ 669   2                      datevalue=((day/10)<<4|(day%10));
+ 670   2                      WriteSet8563(0x86,datevalue);
+ 671   2                      delay1ms(1);            
+ 672   2                      display_Day(day);
+ 673   2                      Write_Address(0x0f);
+ 674   2                      delay1ms(5);
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 12  
+
+ 675   2                      if(CANL==0) 
+ 676   2                      {
+ 677   3                              mode=0;
+ 678   3                              Write_com(0x0c);
+ 679   3                              break;
+ 680   3                      }
+ 681   2                      if(SET==0) break;
+ 682   2              }
+ 683   1              WriteSet8563(0x8e,0x80);
+ 684   1      }
+ 685          void alarmhourset(void)  //闹钟小时调整
+ 686          {
+ 687   1              unsigned char value;
+ 688   1              value=houra;
+ 689   1          while(1)
+ 690   1          {
+ 691   2                      if(ADD==0)
+ 692   2                      {
+ 693   3                              delay1ms(20);
+ 694   3                              if(ADD==0)
+ 695   3                              {
+ 696   4                                      Write_com(0x0c);
+ 697   4                                      delay1ms(5);
+ 698   4                                      value++;
+ 699   4                                      if(value>23) value=0;
+ 700   4                                      while(ADD==0);
+ 701   4                              }
+ 702   3                      }
+ 703   2                      if(RED==0)
+ 704   2                      {
+ 705   3                              delay1ms(20);
+ 706   3                              if(RED==0)
+ 707   3                              {
+ 708   4                                      value--;
+ 709   4                                      if(value==0) value=23;
+ 710   4                                      while(RED==0);
+ 711   4                              }
+ 712   3                      }
+ 713   2                      houra=value;
+ 714   2                      display_houra(houra);
+ 715   2                      gbdisplay(0x45);
+ 716   2                      if(CANL==0) 
+ 717   2                      {
+ 718   3                              delay1ms(500);
+ 719   3                              break;
+ 720   3                      }
+ 721   2          }
+ 722   1      }
+ 723          void alarmminuteset(void)       //闹钟分钟调整
+ 724          {
+ 725   1         while(1)
+ 726   1         {
+ 727   2                      if(ADD==0)
+ 728   2                      {
+ 729   3                              delay1ms(20);
+ 730   3                              if(ADD==0)
+ 731   3                              {
+ 732   4                                      minutea++;
+ 733   4                                      if(minutea>59) minutea=0;
+ 734   4                                      while(ADD==0) ;
+ 735   4                              }
+ 736   3                      }
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 13  
+
+ 737   2                      if(RED==0)
+ 738   2                      {
+ 739   3                              delay1ms(20);
+ 740   3                              if(RED==0)
+ 741   3                              {
+ 742   4                                      minutea--;
+ 743   4                                      if(minutea==0) minutea=59;
+ 744   4                                      while(RED==0) ;
+ 745   4                              }
+ 746   3                      }
+ 747   2                      display_minutea(minutea);
+ 748   2                      gbdisplay(0x48);
+ 749   2                      if(CANL==0)
+ 750   2                      {
+ 751   3                              delay1ms(500);
+ 752   3                              break;
+ 753   3                      }
+ 754   2         }
+ 755   1      }
+ 756          void TimeSet(void)      //时间调整函数
+ 757          {
+ 758   1              display_Time();
+ 759   1              if(SET==0)
+ 760   1              {
+ 761   2                      delay1ms(10);
+ 762   2                      if(SET==0)
+ 763   2                      {
+ 764   3                              mode++;
+ 765   3                              delay1ms(20);
+ 766   3                              switch(mode)
+ 767   3                              {
+ 768   4                                      case(1):{gbdisplay(0x48);hourset();     delay1ms(500);}  break;
+ 769   4                                      case(2):{gbdisplay(0x4c);minuteset();delay1ms(500);} break;
+ 770   4                                      case(3):{gbdisplay(0x4f);secondset();delay1ms(500);} break;
+ 771   4                                      case(4):{gbdisplay(0x09);yearset();delay1ms(500);}   break;     
+ 772   4                                      case(5):{gbdisplay(0x0c);monthset();delay1ms(500);}  break;
+ 773   4                                      case(6):{gbdisplay(0x0f);dayset();delay1ms(500);}    break;
+ 774   4                              }
+ 775   3                              if(mode==7) mode=0;
+ 776   3                      }
+ 777   2              }
+ 778   1      }
+ 779           /***************显示温度模块********************/
+ 780          unsigned char code displayexplain[]={"Digit thermometer"};
+ 781          unsigned char code displayerror[]={"DS18B20 ERROR"};
+ 782          unsigned char code displayerror1[]={"PLEASE CHECK "};
+ 783          unsigned char code displaypart1[]={"WenDu:"};
+ 784          unsigned char code displaypart2[]={"Cent"};
+ 785          unsigned char flag;
+ 786          /**********************操作DS18B20模块***************************/
+ 787          sbit DQ=P3^6;
+ 788          unsigned char time;
+ 789          /**********************DS18B20初始化****************************/
+ 790          bit IntDS18B20(void)
+ 791          {
+ 792   1              bit temp=0;
+ 793   1              DQ=1;
+ 794   1              for(time=0;time<2;time++);
+ 795   1              DQ=0;
+ 796   1              for(time=0;time<200;time++);
+ 797   1              DQ=1;
+ 798   1              for(time=0;time<10;time++);
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 14  
+
+ 799   1              temp=DQ;
+ 800   1              for(time=0;time<200;time++);
+ 801   1              return temp;
+ 802   1      }
+ 803          /**************************读DS18B20**********************/
+ 804           unsigned char ReadDS18B20(void)
+ 805           {
+ 806   1              unsigned char i;
+ 807   1              unsigned char dat;
+ 808   1              for(i=0;i<8;i++)
+ 809   1              {
+ 810   2                      DQ=1;
+ 811   2                      _nop_();
+ 812   2                      DQ=0;
+ 813   2                      _nop_();
+ 814   2                      DQ=1;
+ 815   2                      for(time=0;time<2;time++);
+ 816   2                      dat>>=1;
+ 817   2                      if(DQ==1)
+ 818   2                              dat=dat|0x80;
+ 819   2                      else
+ 820   2                              dat=dat|0x00;
+ 821   2                      for(time=0;time<10;time++);
+ 822   2              }
+ 823   1              return dat;
+ 824   1       }
+ 825           /*********************向DS18B20写数据**************************/
+ 826           void WriteDS18B20(unsigned char date)
+ 827           {
+ 828   1              unsigned char i;
+ 829   1              for(i=0;i<8;i++)
+ 830   1              {
+ 831   2                      DQ=1;
+ 832   2                      _nop_();
+ 833   2                      DQ=0;
+ 834   2                      DQ=date&0x01;
+ 835   2                      for(time=0;time<10;time++);
+ 836   2                      DQ=1;
+ 837   2                      for(time=0;time<1;time++);
+ 838   2                      date>>=1;                               
+ 839   2      
+ 840   2              }
+ 841   1              for(time=0;time<4;time++);
+ 842   1       }
+ 843          /*******************为读取温度做好准备************************/
+ 844          void ReadyreadDS18B20(void)
+ 845          {
+ 846   1              IntDS18B20();
+ 847   1              WriteDS18B20(0XCC);
+ 848   1              WriteDS18B20(0X44);
+ 849   1              delay1ms(200);
+ 850   1              IntDS18B20();
+ 851   1              WriteDS18B20(0XCC);
+ 852   1              WriteDS18B20(0XBE);
+ 853   1                      
+ 854   1      }
+ 855          /*************在1602液晶上显示相关信息模块**********************/
+ 856          /****************当未检测到DS18B20时显示信息模块****************/
+ 857           void Display_Error(void)
+ 858           {
+ 859   1              unsigned char i=0;
+ 860   1              Write_Address(0x00);
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 15  
+
+ 861   1              while(displayerror[i]!='\0')
+ 862   1              {
+ 863   2                      Write_Date(displayerror[i]);
+ 864   2                      i++;
+ 865   2                      delay1ms(100);
+ 866   2              }
+ 867   1              delay1ms(5);
+ 868   1              i=0;
+ 869   1              Write_Address(0x40);
+ 870   1              while(displayerror1[i]!='\0')
+ 871   1              {
+ 872   2                      Write_Date(displayerror1[i]);
+ 873   2                      i++;
+ 874   2                      delay1ms(100);
+ 875   2              }
+ 876   1              delay1ms(3000) ;
+ 877   1       }
+ 878           /*************温度显示模块****************/
+ 879           void Display_Explain(void)
+ 880           {
+ 881   1              unsigned char i=0;
+ 882   1              Write_Address(0x00);
+ 883   1              delay1ms(5);
+ 884   1              while(displayexplain[i]!='\0')
+ 885   1              {
+ 886   2                      Write_Date(displayexplain[i]);
+ 887   2                      i++;
+ 888   2                      delay1ms(5);
+ 889   2              }
+ 890   1              i=0;
+ 891   1              Write_Address(0x40);
+ 892   1              while(displaypart1[i]!='\0')
+ 893   1              {
+ 894   2                      Write_Date(displaypart1[i]);
+ 895   2                      i++;
+ 896   2                      delay1ms(5);
+ 897   2              }
+ 898   1              i=0;
+ 899   1              Write_Address(0x4C);
+ 900   1              while(displaypart2[i]!='\0')
+ 901   1              {
+ 902   2                      Write_Date(displaypart2[i]);
+ 903   2                      i++;
+ 904   2                      delay1ms(5);
+ 905   2              }
+ 906   1              Write_Address(0x49);
+ 907   1              Write_Date('.');
+ 908   1              delay1ms(5);
+ 909   1       }
+ 910           /*********************显示温度整数部分*************************/
+ 911           void Display_Integer(unsigned char x)
+ 912           {
+ 913   1              unsigned char  i,j,k;
+ 914   1              i=x/100;
+ 915   1              j=x%100/10;
+ 916   1              k=x%10;
+ 917   1              Write_Address(0x46);
+ 918   1              if(flag==1) Write_Date('-');
+ 919   1              Write_Date(digit[i]);
+ 920   1              Write_Date(digit[j]);
+ 921   1              Write_Date(digit[k]);
+ 922   1              delay1ms(50) ;
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 16  
+
+ 923   1       }
+ 924           /************显示温度小数部分*********************/
+ 925           void Display_Decimal(unsigned char x)
+ 926           {
+ 927   1              Write_Address(0x4A);
+ 928   1              delay1ms(5);
+ 929   1              Write_Date(digit[x]);
+ 930   1              delay1ms(50);
+ 931   1       }
+ 932          void displayovert(void)
+ 933          {
+ 934   1              unsigned char i;
+ 935   1              Write_com(0x01);
+ 936   1              delay1ms(10);
+ 937   1              Write_Address(0x03);
+ 938   1              delay1ms(10);
+ 939   1              Write_Date('W');
+ 940   1              Write_Date('A');
+ 941   1              Write_Date('R');
+ 942   1              Write_Date('N');
+ 943   1              Write_Date('I');
+ 944   1              Write_Date('N');
+ 945   1              Write_Date('G');
+ 946   1              Write_Date('!');
+ 947   1              Write_Address(0x40);
+ 948   1              while(overtemperature[i]!='\0')
+ 949   1              {
+ 950   2                      Write_Date(overtemperature[i]);
+ 951   2                      i++;
+ 952   2                      delay1ms(10);
+ 953   2              }
+ 954   1      }
+ 955            /*******************温度主函数********************/
+ 956           void Temperature(void)
+ 957           {
+ 958   1              unsigned char i;
+ 959   1              delay1ms(5);
+ 960   1              if(IntDS18B20()!=0)     Display_Error();
+ 961   1              else
+ 962   1              {
+ 963   2                      delay1ms(1);
+ 964   2                      Write_com(0x01);
+ 965   2                      delay1ms(5);
+ 966   2                      Display_Explain();
+ 967   2                      for(length=50;length>0;length--)
+ 968   2                      {
+ 969   3                              for(i=0;i<6;i++)
+ 970   3                              {
+ 971   4                                      flag=0;
+ 972   4                                      ReadyreadDS18B20();
+ 973   4                                      TL=ReadDS18B20();
+ 974   4                                      TH=ReadDS18B20();
+ 975   4                                      if((TH&0XF8)!=0X00)
+ 976   4                                      {
+ 977   5                                              flag=1;
+ 978   5                                              TL=~TL;
+ 979   5                                              TH=~TH;
+ 980   5                                              TL+=1;
+ 981   5                                              if(TL>255) TH+=1;
+ 982   5                                              TN=TH*16+TL/16;
+ 983   5                                              TD=(TL%16)*10/16;
+ 984   5                                      }
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 17  
+
+ 985   4                                      TN=TH*16+TL/16;
+ 986   4                                      TD=(TL%16)*10/16;
+ 987   4                                      Display_Integer(TN);
+ 988   4                                      Display_Decimal(TD);
+ 989   4                                      delay1ms(10);
+ 990   4                              }
+ 991   3                              if(tempswitch==1)
+ 992   3                              {
+ 993   4                                      if(TN>=Maxtemp) 
+ 994   4                                      {
+ 995   5                                              Write_Address(0x03);
+ 996   5                                              delay1ms(5);
+ 997   5                                              displayovert();
+ 998   5                                              while(1)
+ 999   5                                              {
+1000   6                                                      baojing(1);
+1001   6                                                      if(CANL==0) 
+1002   6                                                      {
+1003   7                                                              Write_com(0x01);
+1004   7                                                              delay1ms(5);
+1005   7                                                              break;
+1006   7                                                      }
+1007   6                                              }
+1008   5                                      }
+1009   4                              }
+1010   3                              if(CANL==0) break;
+1011   3                      }
+1012   2              }
+1013   1       }
+1014           void tempset(void)//设置报警温度
+1015           {
+1016   1              if(ADD==0) 
+1017   1              {
+1018   2                      delay1ms(10);
+1019   2                      if(ADD==0) 
+1020   2                      {
+1021   3                              Maxtemp++;
+1022   3                              while(ADD==0);
+1023   3                      }
+1024   2              }
+1025   1              if(RED==0) 
+1026   1              {
+1027   2                      delay1ms(10);
+1028   2                      if(RED==0) 
+1029   2                      {
+1030   3                              Maxtemp--;
+1031   3                              while(RED==0);
+1032   3                      }
+1033   2              }
+1034   1       }
+1035           void Maxtempset(void)    //高温报警设置
+1036           {
+1037   1              Write_com(0x01);
+1038   1              delay1ms(10);
+1039   1              Write_Address(0x03);
+1040   1              delay1ms(10);
+1041   1              Write_Date('T');
+1042   1              Write_Date('E');
+1043   1              Write_Date('M');
+1044   1              Write_Date('P');
+1045   1              Write_Address(0x09);
+1046   1              Write_Date('S');
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 18  
+
+1047   1              Write_Date('E');
+1048   1              Write_Date('T');
+1049   1              Write_Address(0x40);
+1050   1              Write_Date('M');
+1051   1              Write_Date('A');
+1052   1              Write_Date('X');
+1053   1              Write_Date(':');
+1054   1              while(1)
+1055   1              {
+1056   2                      if(SET==0)
+1057   2                      {
+1058   3                              delay1ms(20);
+1059   3                              if(SET==0)
+1060   3                              {
+1061   4                                      Write_Address(0x4e);
+1062   4                                      Write_com(0x0f);
+1063   4                                      while(1)
+1064   4                                      {
+1065   5                                              if(ADD==0)
+1066   5                                              {
+1067   6                                                      delay1ms(20);
+1068   6                                                      if(ADD==0)
+1069   6                                                      {
+1070   7                                                              Write_Address(0x4b);
+1071   7                                                              delay1ms(5);
+1072   7                                                              Write_Date('O');
+1073   7                                                              Write_Date('N');
+1074   7                                                              Write_Date(' ');
+1075   7                                                              tempswitch=1;
+1076   7                                                      }
+1077   6                                              }
+1078   5                                              if(RED==0)
+1079   5                                              {
+1080   6                                                      delay1ms(20);
+1081   6                                                      if(RED==0)
+1082   6                                                      {
+1083   7                                                              Write_Address(0x4b);
+1084   7                                                              Write_Date('O');
+1085   7                                                              Write_Date('F');
+1086   7                                                              Write_Date('F');
+1087   7                                                              tempswitch=0;
+1088   7                                                      }
+1089   6                                              }
+1090   5                                              if(CANL==0) 
+1091   5                                              {
+1092   6                                                      delay1ms(500);
+1093   6                                                      break;
+1094   6                                              }
+1095   5                                      }
+1096   4                              }
+1097   3                      }
+1098   2                      if(tempswitch==1)
+1099   2                      {
+1100   3                              Write_Address(0x4b);
+1101   3                              Write_Date('O');
+1102   3                              Write_Date('N');
+1103   3                              Write_Date(' ');
+1104   3                              tempset();              
+1105   3                              displaymaxt(Maxtemp);
+1106   3                              if(CANL==0) 
+1107   3                              {       
+1108   4                                      Write_com(0x01);
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 19  
+
+1109   4                                      displaymainpart();
+1110   4                                      break;
+1111   4                              }
+1112   3                      }
+1113   2                      if(tempswitch==0)
+1114   2                      {
+1115   3                              Write_com(0x0c);
+1116   3                              Write_Address(0x4b);
+1117   3                              Write_Date('O');
+1118   3                              Write_Date('F');
+1119   3                              Write_Date('F');
+1120   3                      }
+1121   2                      if(CANL==0) 
+1122   2                      {
+1123   3                              Write_com(0x01);
+1124   3                              displaymainpart();
+1125   3                              break;
+1126   3                      }
+1127   2              }
+1128   1       }
+1129           void alarmswitchset(void)
+1130           {
+1131   1              while(1)
+1132   1              {
+1133   2                      if(ADD==0)
+1134   2                      {
+1135   3                              delay1ms(100);
+1136   3                              if(ADD==0)
+1137   3                              {
+1138   4                                      alarmmode=1;
+1139   4                                      Write_Address(0x4c);
+1140   4                                      Write_Date('O');
+1141   4                                      Write_Date('N');
+1142   4                                      Write_Date(' ');
+1143   4                              }
+1144   3                      }
+1145   2                      if(RED==0)
+1146   2                      {
+1147   3                              alarmmode=0;
+1148   3                              Write_Address(0x4c);
+1149   3                              Write_Date('O');
+1150   3                              Write_Date('F');
+1151   3                              Write_Date('F');
+1152   3                      }
+1153   2                      if(CANL==0)
+1154   2                      {
+1155   3                              delay1ms(500);
+1156   3                              break;
+1157   3                      }
+1158   2              }
+1159   1       }
+1160           /**************** 设置模块 ******************/
+1161           void Set(void)
+1162           {
+1163   1              if(SET==0)//if
+1164   1              {
+1165   2                      delay1ms(10);
+1166   2                      if(SET==0)//if0
+1167   2                      {
+1168   3                              Write_Address(0x40);
+1169   3                              Write_Date('T');
+1170   3                              Write_com(0x0f);
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 20  
+
+1171   3                              delay1ms(1000);
+1172   3                              Write_com(0x0c);
+1173   3                              while(1)//while1
+1174   3                              { 
+1175   4                                      TimeSet();
+1176   4                                      if(ADD==0)
+1177   4                                  {
+1178   5                                              delay1ms(20);
+1179   5                                              if(ADD==0)
+1180   5                                              {
+1181   6                                                      Write_com(0x01);
+1182   6                                                      Write_Address(0x00);
+1183   6                                                      delay1ms(5);
+1184   6                                                      Write_Date('S');
+1185   6                                                      delay1ms(10);
+1186   6                                                      Maxtempset();   
+1187   6                                              }
+1188   5                                      }
+1189   4                                      if(RED==0)//if1
+1190   4                                      {
+1191   5                                              delay1ms(20);
+1192   5                                              if(RED==0)//if2
+1193   5                                              {
+1194   6                                                      Write_com(0x01);
+1195   6                                                      delay1ms(5);
+1196   6                                                      Write_Address(0x02);
+1197   6                                                      Write_Date('A');
+1198   6                                                      Write_Date('L');
+1199   6                                                      Write_Date('A');
+1200   6                                                      Write_Date('R');
+1201   6                                                      Write_Date('M');
+1202   6                                                      Write_Address(0x09);
+1203   6                                                      Write_Date('S');
+1204   6                                                      Write_Date('E');
+1205   6                                                      Write_Date('T');
+1206   6                                                      Write_Address(0x46);
+1207   6                                                      Write_Date('-');
+1208   6                                                      display_houra(houra);
+1209   6                                                      display_minutea(minutea);
+1210   6                                                      if(alarmmode==1)
+1211   6                                                      {
+1212   7                                                              Write_Address(0x4c);
+1213   7                                                              Write_Date('O');
+1214   7                                                              Write_Date('N');
+1215   7                                                              Write_Date(' ');
+1216   7                                                      }
+1217   6                                                      if(alarmmode==0)
+1218   6                                                      {
+1219   7                                                              Write_Address(0x4c);
+1220   7                                                              Write_Date('O');
+1221   7                                                              Write_Date('F');
+1222   7                                                              Write_Date('F');                                                        
+1223   7                                                      }
+1224   6                                                      while(1)//while2
+1225   6                                                      {
+1226   7                                                              if(SET==0)
+1227   7                                                              {
+1228   8                                                                      delay1ms(100);
+1229   8                                                                      if(SET==0)
+1230   8                                                                      {
+1231   9                                                                         amode++;
+1232   9                                                                         switch(amode)
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 21  
+
+1233   9                                                                         {
+1234  10              case(1):{gbdisplay(0x45);alarmhourset();Write_com(0x0c);delay1ms(500);} break;
+1235  10              case(2):{gbdisplay(0x48);alarmminuteset();Write_com(0x0c);delay1ms(500);} break;                
+1236  10              case(3):{gbdisplay(0x4c);alarmswitchset();Write_com(0x0c);delay1ms(500);} break;
+1237  10                                                                         }
+1238   9                                                                         if(amode==4) amode=0;
+1239   9                                                                      }       
+1240   8                                                              }
+1241   7                                                              if(CANL==0) 
+1242   7                                                              {
+1243   8                                                                      Write_com(0x01);
+1244   8                                                                      delay1ms(5);
+1245   8                                                                      displaymainpart();
+1246   8                                                                      break;
+1247   8                                                              }
+1248   7                                                      }//end while2
+1249   6                                              }//end if2
+1250   5                                      }//end if1
+1251   4                                      if(CANL==0)
+1252   4                                      {
+1253   5                                              Write_Address(0x40);
+1254   5                                              Write_Date(' ');
+1255   5                                              Write_com(0x0c);
+1256   5                                              break;
+1257   5                                      }
+1258   4                              }//end while1
+1259   3                      }//end if0
+1260   2                              
+1261   2              }//end if
+1262   1       }
+1263          /***************主函数**********************/
+1264          void main()
+1265          {
+1266   1              IE=0X82;  //打开定时中断
+1267   1              TMOD=0X01;      //选择定时器0工作在方式1
+1268   1              TR0=0;          //启动定时器0
+1269   1              IntPCF8563();   //初始化DS1302
+1270   1              delay1ms(1);
+1271   1              Lcd_Int();              //1602液晶初始化
+1272   1              delay1ms(2);
+1273   1              displaystar();   //显示欢迎界面
+1274   1              displaymainpart(); //显示主要部分（不变化）
+1275   1              while(1)
+1276   1              {
+1277   2                      display_Time( );
+1278   2                      Set( );
+1279   2                      if(ADD==0)
+1280   2                      {
+1281   3                              Write_com(0x01);
+1282   3                              delay1ms(5);
+1283   3                              Temperature();
+1284   3                              Write_com(0x01);
+1285   3                              displaymainpart();
+1286   3                      }
+1287   2                      if((hours==houra)&&(minutes==minutea)&&(seconds==0))
+1288   2                      {
+1289   3                              if(alarmmode==1)
+1290   3                              {
+1291   4                                      Write_com(0x01);
+1292   4                                      delay1ms(5);
+1293   4                                      Write_Address(0x03);
+1294   4                                      Write_Date('T');
+C51 COMPILER V9.00   CANLANDER                                                             08/27/2013 09:22:14 PAGE 22  
+
+1295   4                                      Write_Date('I');
+1296   4                                      Write_Date('M');
+1297   4                                      Write_Date('E');
+1298   4                                      Write_Address(0x08);
+1299   4                                      Write_Date('U');
+1300   4                                      Write_Date('P');
+1301   4                                      Write_Date('!');
+1302   4                                      delay1ms(5);
+1303   4                                      while(1)
+1304   4                                      {
+1305   5                                              baojing(1);
+1306   5                                              if(CANL==0)
+1307   5                                              {
+1308   6                                                      Write_com(0x01);
+1309   6                                                      delay1ms(5);
+1310   6                                                      displaymainpart();
+1311   6                                                      break;
+1312   6                                              }
+1313   5                                      }
+1314   4                              }
+1315   3                      }
+1316   2              }  
+1317   1      }
+1318          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3951    ----
+   CONSTANT SIZE    =    132    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     17      26
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       2
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
