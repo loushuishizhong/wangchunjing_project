@@ -1,0 +1,93 @@
+create table car_user
+(
+用户名 char(20),
+密码 char(20), 
+primary key(用户名, 密码)
+);
+
+create table car_info
+(
+车牌号 char(8) primary key,
+颜色 char(20),
+类型 char(20),
+品牌 char(4)
+);
+
+create table car_owner
+(
+姓名 char(10),
+性别 char(2),
+年龄 int,
+身份证号 char(20) primary key,
+住址 char(20),
+联系电话 char(12)
+);
+
+
+create table car_link
+(身份证号 char(20),
+车牌号 char(8),
+primary key(身份证号,车牌号),
+foreign key(身份证号) references car_owner(身份证号)
+on delete cascade
+on update cascade,
+foreign key(车牌号) references car_info(车牌号)
+on delete cascade
+on update cascade
+);
+
+
+create table car_error
+(违章编号 char(10) primary key,
+车牌号 char(8),
+日期 char(20),
+原因 char(20),
+是否处理 char(4)
+foreign key(车牌号) references car_info(车牌号)
+on delete cascade
+on update cascade
+);
+
+create table car_check
+(年检号 char(8) primary key,
+车牌号 char(8),
+车检单位 char(20),
+车检人 char(10),
+车检日期 char(10)
+车间费用 charfloat,
+foreign key(车牌号) references car_info(车牌号)
+on delete cascade
+on update cascade
+);
+
+
+create view carerror
+as
+select 违章编号,车牌号,姓名,身份证号,联系电话,日期,原因,是否处理
+from car_owner,car_error
+where car_owner.身份证号=
+(select 身份证号 from car_link
+where 车牌号=car_error.车牌号);
+
+
+create view carinfo
+as
+select *
+from car_owner,car_info
+where car_owner.身份证号=
+(select 身份证号 from car_link
+where 车牌号=car_info.车牌号);
+
+create table car_check
+(
+车检号 char(8),
+车牌号 char(8),
+车检单位 char(10),
+车检人姓名 char(10),
+车检日期  char(10),
+车检费用 char(20),
+primary key(车检号),
+foreign key(车牌号) references car_info(车牌号)
+on delete cascade
+on update cascade
+);
